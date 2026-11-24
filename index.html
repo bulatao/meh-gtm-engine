@@ -7,22 +7,23 @@
 <header><h1>MEH GTM Engine</h1><p>Find prospective customers for MultiExpert Hub and review the evidence before reaching out.</p></header>
 <main>
 <section><h2>Define your customer</h2>
-<form id="intake"><label for="offer">Offer</label><textarea id="offer" rows="2" required>MultiExpert Hub matches companies with individual AI specialists or managed service providers for AI delivery and operations.</textarea>
-<label for="buyer">Target buyer role</label><input id="buyer" value="IT or AI delivery leader" required>
-<label for="segment">Target segment</label><input id="segment" value="Organizations building or operating AI systems">
-<label for="topics">Priority capabilities</label><input id="topics" value="AI, machine learning" placeholder="AI, cloud, data">
-<label for="priority">Engagement priority</label><select id="priority"><option value="either">Either engagement</option><option value="individual">Individual specialist</option><option value="msp">Managed service provider</option></select>
-<button type="button" class="secondary" id="generateProfile">Generate buyer profile from offer</button>
+<label for="offer">Offer</label><textarea id="offer" rows="2" required>MultiExpert Hub matches companies with individual AI specialists or managed service providers for AI delivery and operations.</textarea>
+<button type="button" id="generateProfile">Generate buyer profile from offer</button>
+<fieldset style="border:0;padding:0;margin:20px 0 0"><legend>Buyer profile</legend>
+<label for="buyer">Target buyer role</label><input id="buyer">
+<label for="segment">Target segment</label><input id="segment">
+<label for="topics">Priority capabilities</label><input id="topics">
+<label for="priority">Engagement priority</label><select id="priority"><option value=""></option><option value="either">Either engagement</option><option value="individual">Individual specialist</option><option value="msp">Managed service provider</option></select>
+</fieldset>
 <p id="profileReason" class="muted" aria-live="polite"></p>
+<button type="button" id="autoDiscovery" disabled>Discover companies and hiring signals</button>
+<details><summary>Other discovery options</summary>
 <label for="scope">Discovery filter</label><select id="scope"><option value="all">All evidence types</option><option value="individual">Individual contributor signals</option><option value="msp">MSP signals</option><option value="unclear">Needs discovery</option></select>
-<button>Run demo examples</button></form>
-<form id="liveDiscovery"><label for="boards">Public Greenhouse job boards</label><input id="boards" value="arionkoder, future" required maxlength="150" aria-describedby="liveHelp">
-<p id="liveHelp" class="muted">Enter comma-separated board names. Published job postings are hiring signals. The curated MSP example remains available under Run demo examples.</p>
-<button id="liveButton">Scan selected boards</button></form>
-<button type="button" id="autoDiscovery">Discover companies and hiring signals</button>
-<p class="muted">Search public Hacker News hiring discussions for Greenhouse links that match the priority capabilities, then verify current jobs on those boards.</p>
-<p id="profile" class="muted" aria-live="polite"></p><button type="button" id="rerank" class="secondary">Apply criteria to current results</button></section>
-<section><h2>Evidence and matches</h2><p class="muted">Provider availability and eligibility require confirmation.</p><div id="matches" class="grid"></div></section>
+<form id="intake"><button class="secondary">Run demo examples</button></form>
+<form id="liveDiscovery"><label for="boards">Public Greenhouse job boards</label><input id="boards" placeholder="arionkoder, future" required maxlength="150">
+<button id="liveButton" class="secondary">Scan selected boards</button></form>
+</details></section>
+<section><h2>Evidence and matches</h2><p id="profile" class="muted" aria-live="polite">Generate a buyer profile and run discovery to see matches here.</p><button type="button" id="rerank" class="secondary" hidden>Apply criteria to current results</button><div id="matches" class="grid"></div></section>
 <section id="review" hidden><h2>Review outreach</h2><div id="graph" class="graph"></div><div id="contactEvidence"></div><div id="provider" hidden></div><p id="question"></p><label for="message">Draft email</label><textarea id="message" rows="7"></textarea><button id="approve">Approve draft</button><button class="secondary" id="reject">Reject draft</button><button id="delivery" class="secondary" disabled>Send to local test inbox</button><p id="feedback" aria-live="polite"></p></section>
 <section><h2>Local test inbox</h2><p class="muted">The demo captures approved messages here without external delivery.</p><div id="inbox" aria-live="polite"></div></section>
 <section><h2>Pipeline and audit trail</h2><div id="pipeline" class="grid"></div><ol class="log" id="audit"></ol></section>
@@ -169,6 +170,7 @@ function discover(records=fixtures, diagnostics='') {
  const candidates=records.filter(item=>!state.excluded.has(item.id))
   .map(item=>rankMatch(item,profile)).filter(item=>scope==='all'||item.route===scope)
   .sort((left,right)=>right.score-left.score);
+ el('rerank').hidden=!records.length;
  el('profile').textContent='Buyer: '+el('buyer').value+'. Segment hypothesis: '+el('segment').value+'. '+candidates.length+' matches. '+diagnostics;
  for(const item of candidates) {
   const route=item.route || classify(item.signal);
@@ -236,13 +238,13 @@ function review(item,route) {
  el('delivery').disabled=true;
  el('review').scrollIntoView({block:'nearest'});
 }
-let activeRecords=fixtures;
+let activeRecords=[];
 let discoveryStatus='';
 let discoveryRun=0;
 let profiledOffer=el('offer').value.trim();
 function showDiscoveryBusy(busy) {
  el('liveButton').disabled=busy;
- el('autoDiscovery').disabled=busy;
+ el('autoDiscovery').disabled=busy || !el('topics').value.trim();
 }
 function enteredBoards() {
  return [...new Set(el('boards').value.toLowerCase().split(',').map(board=>board.trim()).filter(Boolean))];
@@ -252,16 +254,23 @@ el('generateProfile').onclick=()=>{
  if(!offer) {el('profileReason').textContent='Enter an offer first.';return;}
  const profile=inferProfile(offer);
  for(const [field,value] of Object.entries(profile)) el(field).value=value;
+ discoveryRun++;
  if(offer!==profiledOffer) {
-  discoveryRun++;
-  showDiscoveryBusy(false);
   activeRecords=[];
-  discoveryStatus='Offer changed. Run discovery to find results for this profile.';
+  discoveryStatus='';
  }
  profiledOffer=offer;
- el('profileReason').textContent='Profile suggested from the offer. Edit any field before ranking. Company size and purchase intent need verification.';
- discover(activeRecords,discoveryStatus);
+ el('profileReason').textContent='Review or edit the profile, then run discovery below.';
+ showDiscoveryBusy(false);
+ if(activeRecords.length) discover(activeRecords,discoveryStatus);
+ else {
+  el('review').hidden=true;
+  el('matches').replaceChildren();
+  el('rerank').hidden=true;
+  el('profile').textContent='Buyer profile ready. Run discovery to find matches.';
+ }
 };
+el('topics').oninput=()=>showDiscoveryBusy(el('liveButton').disabled);
 el('rerank').onclick=()=>discover(activeRecords,discoveryStatus);
 el('intake').onsubmit=event=>{
  event.preventDefault();
@@ -365,5 +374,4 @@ el('delivery').onclick=()=>{
  el('feedback').textContent='The approved message is in the local test inbox.';
  log('Engine','Delivered the approved message for '+state.selected.name+' to the local test inbox.');
 };
-discover();
 </script></html>
