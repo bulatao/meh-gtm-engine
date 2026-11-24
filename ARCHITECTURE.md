@@ -2,11 +2,15 @@
 
 ## Run the prototype
 
-Open MEH GTM Engine.html in a desktop browser. The demo examples work offline. Select Find live hiring signals to query public Greenhouse boards over the internet. The evidence links open the original public sources.
+Open index.html from the source repository, or open the published demo at https://meh-gtm-engine.lovable.app/. Generate an editable buyer profile from the offer, then select Find live hiring signals to query public Greenhouse boards. The curated examples work offline and all evidence links open their original public sources.
 
 ## System design
 
-Live discovery reads up to five user-selected Greenhouse boards directly through their public API. It filters published job titles for AI, cloud and data signals, then checks descriptions for an explicit contract role. Other relevant roles remain discovery questions. Results carry the original posting link, and a failed board does not suppress results from successful boards. Procurement matching uses the curated Tyrone example.
+Live discovery reads up to five user-selected Greenhouse boards through their public API. It filters published job titles for AI, cloud and data signals and checks descriptions for explicit contract work. Other relevant roles remain discovery questions. Results carry the original posting link, and a failed board does not suppress results from successful boards. Procurement matching uses the curated Tyrone example.
+
+The profile generator uses transparent rules to suggest a buyer role, segment hypothesis, capability keywords, and engagement priority from the offer. Capability matches contribute up to 50 points, compatible affirmative engagement evidence contributes 35, and a sourced contact role contributes 15. The reviewer can edit priorities and rerank current results without querying the feeds again. The score ranks the evidence available to the demo. Segment and buyer role are hypotheses, and purchase intent and eligibility require confirmation.
+
+The Arionkoder live board has a curated contact lookup from the company's public leadership page for its team augmentation lead. This verifies a published role and leaves ownership of a particular opening and buying authority unconfirmed. Other live boards retain an inferred buyer role until sourced.
 
 The browser holds an editable product offer, buyer role and discovery filter. The discovery stage evaluates three curated public evidence records using deterministic rules. An explicit contract specialist signal routes to an individual contributor. An explicit accountable provider signal routes to an MSP. Other signals route to a discovery question. The Town of Tyrone procurement demonstrates provider ownership and falls outside the proposed mid-market segment. Its RFP names the Town Manager as proposal addressee. EMPIST's directory listing supports service overlap, while the addendum establishes gaps to verify before treating it as eligible.
 
@@ -22,6 +26,6 @@ The engine drafts outreach from the selected evidence, offer and route. For Tyro
 - **1:25–1:50**. Approve the internal review draft, deliver it to the local test inbox, and show the approval and delivery in the audit trail.
 - **1:50–2:10**. Reject a weak match and rerun discovery. Show that the rejected account stays out for the session.
 
-## Remaining submission work
+## Submission and known limits
 
-Extend live discovery to procurement notices and verify contacts for new leads. Add a graph store, durable pipeline state and external controlled-inbox delivery. Integrate Band Desktop to demonstrate real planner, builder and reviewer handoffs. Flexprice and Snyk are separate optional integrations. Prepare a public source repository and record the actual walkthrough after the submission workflow is verified.
+The live app and public source repository are available at https://meh-gtm-engine.lovable.app/ and https://github.com/bulatao/meh-gtm-engine. The walkthrough is submitted separately. Procurement discovery, broad contact enrichment, a graph database, durable pipeline state, external delivery and bonus integrations remain outside this prototype.
