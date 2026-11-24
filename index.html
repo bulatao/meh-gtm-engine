@@ -18,7 +18,9 @@
 <button>Run demo examples</button></form>
 <form id="liveDiscovery"><label for="boards">Public Greenhouse job boards</label><input id="boards" value="arionkoder, future" required maxlength="150" aria-describedby="liveHelp">
 <p id="liveHelp" class="muted">Enter comma-separated board names. Published job postings are hiring signals. The curated MSP example remains available under Run demo examples.</p>
-<button id="liveButton">Find live hiring signals</button></form>
+<button id="liveButton">Scan selected boards</button></form>
+<button type="button" id="autoDiscovery">Discover companies and hiring signals</button>
+<p class="muted">Search public Hacker News hiring discussions for Greenhouse links that match the priority capabilities, then verify current jobs on those boards.</p>
 <p id="profile" class="muted" aria-live="polite"></p><button type="button" id="rerank" class="secondary">Apply criteria to current results</button></section>
 <section><h2>Evidence and matches</h2><p class="muted">Provider availability and eligibility require confirmation.</p><div id="matches" class="grid"></div></section>
 <section id="review" hidden><h2>Review outreach</h2><div id="graph" class="graph"></div><div id="contactEvidence"></div><div id="provider" hidden></div><p id="question"></p><label for="message">Draft email</label><textarea id="message" rows="7"></textarea><button id="approve">Approve draft</button><button class="secondary" id="reject">Reject draft</button><button id="delivery" class="secondary" disabled>Send to local test inbox</button><p id="feedback" aria-live="polite"></p></section>
@@ -104,6 +106,27 @@ async function fetchHiringBoard(board) {
  if(!Array.isArray(result.jobs)) throw new Error('Unexpected response');
  return result.jobs.map(job=>hiringSignal(job,board,job.company_name || board)).filter(Boolean).slice(0,8);
 }
+function boardsInPost(hit) {
+ const page=new DOMParser().parseFromString(hit.comment_text || '', 'text/html');
+ const links=[...page.querySelectorAll('a[href]')].map(link=>link.getAttribute('href'));
+ const validBoard=/^https:\/\/(?:job-boards(?:\.eu)?|boards)\.greenhouse\.io\/([a-z0-9_-]+)(?:[/?#]|$)/i;
+ return [...new Set(links.map(link=>link.match(validBoard)?.[1].toLowerCase()).filter(Boolean))];
+}
+async function findPublicBoards(topic) {
+ const url=new URL('https://hn.algolia.com/api/v1/search');
+ url.search=new URLSearchParams({query:'greenhouse '+topic,tags:'comment',hitsPerPage:'70'});
+ const response=await fetch(url,{signal:AbortSignal.timeout(10000)});
+ if(!response.ok) throw new Error('Search unavailable');
+ const {hits}=await response.json();
+ return hits.flatMap(hit=>{
+  if(!/^\d+$/.test(hit.objectID)) return [];
+  return boardsInPost(hit).map(board=>({board,discoveryUrl:'https://news.ycombinator.com/item?id='+hit.objectID}));
+ });
+}
+function evidenceMatches(item,topic) {
+ const phrases=capabilityGroups.find(group=>group.some(alias=>words(alias)===words(topic))) || [topic];
+ return phrases.some(phrase=>mentions(item.title+' '+item.signal,phrase));
+}
 const el = id => document.getElementById(id);
 const state = {leads:{}, audit:[], selected:null, approved:null, excluded:new Set()};
 const add = (parent, tag, text, css) => {
@@ -149,6 +172,13 @@ function discover(records=fixtures, diagnostics='') {
   source.href=item.url;
   source.target='_blank';
   source.rel='noopener noreferrer';
+  if(item.discoveryUrl) {
+   card.append(document.createElement('br'));
+   const discovery=add(card,'a','Where this board was found');
+   discovery.href=item.discoveryUrl;
+   discovery.target='_blank';
+   discovery.rel='noopener noreferrer';
+  }
   card.append(document.createElement('br'));
   add(card,'button','Review match').onclick=()=>review(item,route);
  }
@@ -198,6 +228,13 @@ function review(item,route) {
 let activeRecords=fixtures;
 let discoveryStatus='';
 let discoveryRun=0;
+function showDiscoveryBusy(busy) {
+ el('liveButton').disabled=busy;
+ el('autoDiscovery').disabled=busy;
+}
+function enteredBoards() {
+ return [...new Set(el('boards').value.toLowerCase().split(',').map(board=>board.trim()).filter(Boolean))];
+}
 el('generateProfile').onclick=()=>{
  const offer=el('offer').value.trim();
  if(!offer) {el('profileReason').textContent='Enter an offer first.';return;}
@@ -210,27 +247,63 @@ el('rerank').onclick=()=>discover(activeRecords,discoveryStatus);
 el('intake').onsubmit=event=>{
  event.preventDefault();
  discoveryRun++;
- el('liveButton').disabled=false;
+ showDiscoveryBusy(false);
  activeRecords=fixtures;
  discoveryStatus='Curated demo examples.';
  discover(activeRecords,discoveryStatus);
 };
 el('liveDiscovery').onsubmit=async event=>{
  event.preventDefault();
- const boards=[...new Set(el('boards').value.toLowerCase().split(',').map(board=>board.trim()).filter(Boolean))];
+ const boards=enteredBoards();
  if(!boards.length || boards.length>5 || boards.some(board=>!/^[a-z0-9_-]+$/.test(board))) {
   el('profile').textContent='Enter one to five valid Greenhouse board names.';
   return;
  }
  const run=++discoveryRun;
- el('liveButton').disabled=true;
+ showDiscoveryBusy(true);
  el('profile').textContent='Checking public job boards…';
  const results=await Promise.allSettled(boards.map(fetchHiringBoard));
  if(run!==discoveryRun) return;
  const failed=boards.filter((board,index)=>results[index].status==='rejected');
  activeRecords=results.flatMap(result=>result.status==='fulfilled'?result.value:[]);
  discoveryStatus='Live Greenhouse listings. '+(failed.length?'Unavailable boards: '+failed.join(', ')+'.':'');
- el('liveButton').disabled=false;
+ showDiscoveryBusy(false);
+ discover(activeRecords,discoveryStatus);
+};
+el('autoDiscovery').onclick=async()=>{
+ const topics=[...new Set(el('topics').value.split(',').map(words).filter(Boolean))].slice(0,3);
+ if(!topics.length) {
+  el('profile').textContent='Enter at least one priority capability to discover companies.';
+  return;
+ }
+ const run=++discoveryRun;
+ showDiscoveryBusy(true);
+ el('profile').textContent='Finding new boards in public hiring discussions…';
+ const searches=await Promise.allSettled(topics.map(findPublicBoards));
+ if(run!==discoveryRun) return;
+ const knownBoards=new Set(enteredBoards());
+ const found=new Map();
+ for(const result of searches) {
+  if(result.status!=='fulfilled') continue;
+  for(const entry of result.value) {
+   if(!knownBoards.has(entry.board) && !found.has(entry.board)) found.set(entry.board,entry);
+  }
+ }
+ const candidates=[...found.values()].slice(0,12);
+ el('profile').textContent='Checking '+candidates.length+' discovered boards for current jobs…';
+ const verified=await Promise.allSettled(candidates.map(async entry=>{
+  const jobs=await fetchHiringBoard(entry.board);
+  return jobs.filter(job=>topics.some(topic=>evidenceMatches(job,topic)))
+   .map(job=>({...job,discoveryUrl:entry.discoveryUrl}));
+ }));
+ if(run!==discoveryRun) return;
+ activeRecords=verified.flatMap(result=>result.status==='fulfilled'?result.value:[]);
+ const matchedBoards=verified.filter(result=>result.status==='fulfilled' && result.value.length).length;
+ const unavailable=verified.filter(result=>result.status==='rejected').length;
+ discoveryStatus=searches.every(result=>result.status==='rejected')
+  ? 'Public hiring search unavailable. Scan selected boards or try again.'
+  : 'Automatic discovery verified '+matchedBoards+' new boards with relevant live jobs. '+(unavailable?unavailable+' candidate boards unavailable.':'');
+ showDiscoveryBusy(false);
  discover(activeRecords,discoveryStatus);
 };
 el('message').oninput=()=>{
