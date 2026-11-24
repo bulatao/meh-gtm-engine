@@ -23,7 +23,7 @@
 <form id="liveDiscovery"><label for="boards">Public Greenhouse job boards</label><input id="boards" placeholder="arionkoder, future" required maxlength="150">
 <button id="liveButton" class="secondary">Scan selected boards</button></form>
 </details></section>
-<section><h2>Evidence and matches</h2><p id="profile" class="muted" aria-live="polite">Generate a buyer profile and run discovery to see matches here.</p><button type="button" id="rerank" class="secondary" hidden>Apply criteria to current results</button><div id="matches" class="grid"></div></section>
+<section><h2>Evidence and matches</h2><p id="profile" class="muted" aria-live="polite">Generate a buyer profile and run discovery to see matches here.</p><div id="matches" class="grid"></div></section>
 <section id="review" hidden><h2>Review outreach</h2><div id="graph" class="graph"></div><div id="contactEvidence"></div><div id="provider" hidden></div><p id="question"></p><label for="message">Draft email</label><textarea id="message" rows="7"></textarea><button id="approve">Approve draft</button><button class="secondary" id="reject">Reject draft</button><button id="delivery" class="secondary" disabled>Send to local test inbox</button><p id="feedback" aria-live="polite"></p></section>
 <section><h2>Local test inbox</h2><p class="muted">The demo captures approved messages here without external delivery.</p><div id="inbox" aria-live="polite"></div></section>
 <section><h2>Pipeline and audit trail</h2><div id="pipeline" class="grid"></div><ol class="log" id="audit"></ol></section>
@@ -170,7 +170,6 @@ function discover(records=fixtures, diagnostics='') {
  const candidates=records.filter(item=>!state.excluded.has(item.id))
   .map(item=>rankMatch(item,profile)).filter(item=>scope==='all'||item.route===scope)
   .sort((left,right)=>right.score-left.score);
- el('rerank').hidden=!records.length;
  el('profile').textContent='Buyer: '+el('buyer').value+'. Segment hypothesis: '+el('segment').value+'. '+candidates.length+' matches. '+diagnostics;
  for(const item of candidates) {
   const route=item.route || classify(item.signal);
@@ -266,12 +265,10 @@ el('generateProfile').onclick=()=>{
  else {
   el('review').hidden=true;
   el('matches').replaceChildren();
-  el('rerank').hidden=true;
   el('profile').textContent='Buyer profile ready. Run discovery to find matches.';
  }
 };
 el('topics').oninput=()=>showDiscoveryBusy(el('liveButton').disabled);
-el('rerank').onclick=()=>discover(activeRecords,discoveryStatus);
 el('intake').onsubmit=event=>{
  event.preventDefault();
  discoveryRun++;
