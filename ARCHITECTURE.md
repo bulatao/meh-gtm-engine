@@ -20,11 +20,11 @@ The engine drafts outreach from the selected evidence, offer and route. For Tyro
 
 ## Two-minute demo outline
 
-- **0:00–0:25**. Introduce MEH as the first prospective GTM Engine customer. Run fixture discovery from its offer and an IT or AI delivery buyer role.
-- **0:25–0:55**. Compare Arionkoder’s contract opening, Tyrone’s managed IT procurement, and Future’s ambiguous AI hiring signal.
-- **0:55–1:25**. Open Tyrone. Show the source, proposal addressee, EMPIST’s overlapping capabilities, and the qualifications still to confirm.
-- **1:25–1:50**. Approve the internal review draft, deliver it to the local test inbox, and show the approval and delivery in the audit trail.
-- **1:50–2:10**. Reject a weak match and rerun discovery. Show that the rejected account stays out for the session.
+- Generate an editable buyer profile from MEH’s offer.
+- Run live discovery. Show the ranking, contract signal, and source for the top Arionkoder posting.
+- Open the lead. Show the contact source and the question that still needs to be answered.
+- Approve the same lead’s draft and show the local test inbox, pipeline, and human and engine audit entries.
+- Point to the curated Tyrone → EMPIST case for the managed service provider path.
 
 ## Submission and known limits
 
