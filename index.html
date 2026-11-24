@@ -279,7 +279,11 @@ el('autoDiscovery').onclick=async()=>{
  const run=++discoveryRun;
  showDiscoveryBusy(true);
  el('profile').textContent='Finding new boards in public hiring discussions…';
- const searches=await Promise.allSettled(topics.map(findPublicBoards));
+ const queryTerms=[...new Set(topics.flatMap(topic=>{
+  const group=capabilityGroups.find(aliases=>aliases[0].toLowerCase()===topic);
+  return group ? group.slice(0,2) : [topic];
+ }))].slice(0,6);
+ const searches=await Promise.allSettled(queryTerms.map(findPublicBoards));
  if(run!==discoveryRun) return;
  const knownBoards=new Set(enteredBoards());
  const found=new Map();
