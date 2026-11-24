@@ -3,6 +3,7 @@
 <title>MEH GTM Engine</title>
 <style>
 :root{font:16px system-ui;color:#192b2b;background:#f3f5f0}*{box-sizing:border-box}body{margin:0}header{background:#123831;color:#fff;padding:32px max(5vw,20px)}header p{color:#bfd9c9}h1{margin:0;font-size:clamp(30px,5vw,49px);letter-spacing:-.045em}main{max-width:1160px;margin:auto;padding:24px}section{background:#fff;border:1px solid #dbe3da;border-radius:16px;padding:22px;margin-bottom:18px}h2,h3{margin:0 0 12px}p{line-height:1.5}label{display:block;font-weight:650;margin:12px 0 6px}textarea,input,select{width:100%;font:inherit;border:1px solid #9eafa4;border-radius:8px;padding:10px;background:white;color:inherit}textarea{resize:vertical}button{border:0;border-radius:8px;background:#166451;color:white;font:inherit;font-weight:650;padding:10px 15px;cursor:pointer;margin:8px 8px 0 0}button.secondary{background:#e5eee6;color:#1e4638}button:disabled{opacity:.55;cursor:default}a{color:#176751}small,.muted{color:#4b625a}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,250px),1fr));gap:12px}.card{border:1px solid #dbe3da;border-radius:11px;padding:16px}.route{font-weight:700;color:#166451}.graph{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:12px 0}.graph span{background:#e5eee6;padding:8px;border-radius:8px}.log{padding-left:22px}[hidden]{display:none!important}
+.card .selection{display:flex;align-items:center;gap:8px;font-weight:600}.selection input{width:auto}.batch-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.batch-actions button{margin:0}
 </style>
 <header><h1>MEH GTM Engine</h1><p>Find prospective customers for MultiExpert Hub and review the evidence before reaching out.</p></header>
 <main>
@@ -24,7 +25,8 @@
 <button id="liveButton" class="secondary">Scan selected boards</button></form>
 </details></section>
 <section><h2>Evidence and matches</h2><p id="profile" class="muted" aria-live="polite">Generate a buyer profile and run discovery to see matches here.</p><div id="matches" class="grid"></div></section>
-<section id="review" hidden><h2>Review outreach</h2><div id="graph" class="graph"></div><div id="contactEvidence"></div><div id="provider" hidden></div><p id="question"></p><label for="message">Draft email</label><textarea id="message" rows="7"></textarea><button id="approve">Approve draft</button><button class="secondary" id="reject">Reject draft</button><button id="delivery" class="secondary" disabled>Send to local test inbox</button><p id="feedback" aria-live="polite"></p></section>
+<section id="review" hidden><h2>Review outreach</h2><div id="graph" class="graph"></div><div id="contactEvidence"></div><div id="provider" hidden></div><p id="question"></p><label for="message">Draft email</label><textarea id="message" rows="7"></textarea><button id="approve">Approve draft</button><button class="secondary" id="reject">Reject draft</button><p id="feedback" aria-live="polite"></p></section>
+<section id="batch" hidden><h2>Send selected drafts</h2><div class="batch-actions"><span id="selectedCount" aria-live="polite">0 selected</span><button id="delivery" disabled>Send to local test inbox</button></div><p id="batchFeedback" class="muted" aria-live="polite">Selecting a card approves its draft for this batch.</p></section>
 <section><h2>Local test inbox</h2><p class="muted">The demo captures approved messages here without external delivery.</p><div id="inbox" aria-live="polite"></div></section>
 <section><h2>Pipeline and audit trail</h2><div id="pipeline" class="grid"></div><ol class="log" id="audit"></ol></section>
 </main><script>
@@ -140,7 +142,7 @@ function evidenceMatches(item,topic) {
  return phrases.some(phrase=>mentions(item.title+' '+item.signal,phrase));
 }
 const el = id => document.getElementById(id);
-const state = {leads:{}, audit:[], selected:null, approved:null, excluded:new Set()};
+const state = {leads:{}, audit:[], selected:null, approved:new Map(), checkboxes:new Map(), excluded:new Set()};
 const add = (parent, tag, text, css) => {
  const node=document.createElement(tag);
  node.textContent=text;
@@ -165,6 +167,7 @@ function renderPipeline() {
 function discover(records=fixtures, diagnostics='') {
  el('review').hidden=true;
  el('matches').replaceChildren();
+ state.checkboxes.clear();
  const scope=el('scope').value;
  const profile={topics:el('topics').value,priority:el('priority').value};
  const candidates=records.filter(item=>!state.excluded.has(item.id))
@@ -192,14 +195,71 @@ function discover(records=fixtures, diagnostics='') {
    discovery.rel='noopener noreferrer';
   }
   card.append(document.createElement('br'));
+  const label=add(card,'label','','selection');
+  const checkbox=document.createElement('input');
+  checkbox.type='checkbox';
+  checkbox.checked=state.approved.has(item.id);
+  checkbox.setAttribute('aria-label','Select and approve draft for '+item.name+(item.title?' — '+item.title:''));
+  label.append(checkbox);
+  add(label,'span','Select and approve draft');
+  state.checkboxes.set(item.id,checkbox);
+  checkbox.onchange=()=>{
+   if(checkbox.checked) {
+    const message=state.selected?.id===item.id && !el('review').hidden
+     ? el('message').value.trim()
+     : draftFor(item);
+    approveForBatch(item,message);
+   } else {
+    removeFromBatch(item,'Matched');
+    log('Human','Removed '+item.name+' from the batch.');
+   }
+  };
   add(card,'button','Review match').onclick=()=>review(item,route);
  }
  if(!candidates.length) add(el('matches'),'p','No records meet the current filter.');
+ updateBatch();
  log('Engine','Found '+candidates.length+' records matching the current filter.');
+}
+function discoveryQuestion(route) {
+ return route==='individual'?'Would a contract AI specialist help with this work?':route==='msp'?'Would it be useful to compare providers that can own delivery?':'Are you looking for a specialist to join your team, or a provider to own delivery?';
+}
+function draftFor(item) {
+ const question=discoveryQuestion(item.route || classify(item.signal));
+ return item.provider
+  ? ['Subject: Internal review — '+item.provider.name+' and Tyrone RFP TH-2026-03','','MEH team,','',item.signal,item.provider.fit,'',item.provider.gaps,'','Please verify eligibility and use the published procurement process for any follow-up.','',item.url,item.provider.url].join('\n')
+  : ['Subject: AI delivery support for '+item.name,'','Hi '+item.name+' team,','',item.signal,'',el('offer').value+' '+question,'','Source: '+item.url,'','Jose | MultiExpert Hub'].join('\n');
+}
+function updateBatch() {
+ const count=state.approved.size;
+ el('batch').hidden=!state.checkboxes.size && !count && !el('inbox').children.length;
+ el('selectedCount').textContent=count+' selected';
+ el('delivery').disabled=count===0;
+ const reviewing=state.selected && state.approved.has(state.selected.id);
+ el('approve').textContent=reviewing?'Approved for batch':'Approve draft';
+ el('approve').disabled=Boolean(reviewing);
+ for(const [id,checkbox] of state.checkboxes) checkbox.checked=state.approved.has(id);
+}
+function approveForBatch(item,message) {
+ if(!message) {
+  el('feedback').textContent='Enter a draft before approving.';
+  updateBatch();
+  return;
+ }
+ state.approved.set(item.id,{item,message});
+ state.leads[item.id].stage='Approved';
+ el('batchFeedback').textContent='Selected drafts are approved for local test delivery.';
+ if(state.selected?.id===item.id) el('feedback').textContent='Approved and selected for the batch.';
+ updateBatch();
+ log('Human','Approved the draft for '+item.name+'.');
+}
+function removeFromBatch(item,stage) {
+ state.approved.delete(item.id);
+ state.leads[item.id].stage=stage;
+ if(state.selected?.id===item.id) el('feedback').textContent='Draft removed from the batch.';
+ updateBatch();
 }
 function review(item,route) {
  state.selected=item;
- state.approved=null;
  el('review').hidden=false;
  el('graph').replaceChildren();
  const nodes=[item.name,'Public signal',item.contact || el('buyer').value+' (inferred)',labels[route]];
@@ -228,13 +288,10 @@ function review(item,route) {
    providerBox.append(document.createElement('br'));
   }
  }
- const question=route==='individual'?'Would a contract AI specialist help with this work?':route==='msp'?'Would it be useful to compare providers that can own delivery?':'Are you looking for a specialist to join your team, or a provider to own delivery?';
- el('question').textContent=question;
- el('message').value=item.provider
-  ? ['Subject: Internal review — '+item.provider.name+' and Tyrone RFP TH-2026-03','','MEH team,','',item.signal,item.provider.fit,'',item.provider.gaps,'','Please verify eligibility and use the published procurement process for any follow-up.','',item.url,item.provider.url].join('\n')
-  : ['Subject: AI delivery support for '+item.name,'','Hi '+item.name+' team,','',item.signal,'',el('offer').value+' '+question,'','Source: '+item.url,'','Jose | MultiExpert Hub'].join('\n');
+ el('question').textContent=discoveryQuestion(route);
+ el('message').value=state.approved.get(item.id)?.message || draftFor(item);
  el('feedback').textContent='';
- el('delivery').disabled=true;
+ updateBatch();
  el('review').scrollIntoView({block:'nearest'});
 }
 let activeRecords=[];
@@ -255,6 +312,10 @@ el('generateProfile').onclick=()=>{
  for(const [field,value] of Object.entries(profile)) el(field).value=value;
  discoveryRun++;
  if(offer!==profiledOffer) {
+  for(const {item} of state.approved.values()) state.leads[item.id].stage='Matched';
+  state.approved.clear();
+  state.checkboxes.clear();
+  updateBatch();
   activeRecords=[];
   discoveryStatus='';
  }
@@ -336,39 +397,35 @@ el('autoDiscovery').onclick=async()=>{
  discover(activeRecords,discoveryStatus);
 };
 el('message').oninput=()=>{
- if(!state.approved) return;
- state.leads[state.selected.id].stage='Needs reapproval';
- state.approved=null;
- el('delivery').disabled=true;
+ if(!state.approved.has(state.selected.id)) return;
+ removeFromBatch(state.selected,'Needs reapproval');
  el('feedback').textContent='Draft changed. Approve the revised version before recording delivery.';
  log('Human','Edited the approved draft.');
 };
 el('approve').onclick=()=>{
- const message=el('message').value.trim();
- if(!message) {el('feedback').textContent='Enter a draft before approving.';return;}
- state.approved=message;
- state.leads[state.selected.id].stage='Approved';
- el('delivery').disabled=false;
- el('feedback').textContent='Approved and ready for the local test inbox.';
- log('Human','Approved the draft for '+state.selected.name+'.');
+ approveForBatch(state.selected,el('message').value.trim());
 };
 el('reject').onclick=()=>{
  state.excluded.add(state.selected.id);
- state.leads[state.selected.id].stage='Rejected';
+ removeFromBatch(state.selected,'Rejected');
  const name=state.selected.name;
  discover(activeRecords,discoveryStatus);
  log('Human','Rejected '+name+'. Future discovery runs exclude this account for this session.');
 };
 el('delivery').onclick=()=>{
- if(!state.approved || state.approved!==el('message').value.trim()) return;
- const receipt=add(el('inbox'),'article','','card');
- add(receipt,'strong',state.selected.name+' · '+new Date().toLocaleTimeString());
- const body=add(receipt,'p',state.approved);
- body.style.whiteSpace='pre-wrap';
- state.leads[state.selected.id].stage='Delivered to local test inbox';
- state.approved=null;
- el('delivery').disabled=true;
- el('feedback').textContent='The approved message is in the local test inbox.';
- log('Engine','Delivered the approved message for '+state.selected.name+' to the local test inbox.');
+ const batch=[...state.approved.values()];
+ if(!batch.length) return;
+ for(const {item,message} of batch) {
+  const receipt=add(el('inbox'),'article','','card');
+  add(receipt,'strong',item.name+' · '+new Date().toLocaleTimeString());
+  const body=add(receipt,'p',message);
+  body.style.whiteSpace='pre-wrap';
+  state.leads[item.id].stage='Delivered to local test inbox';
+  log('Engine','Delivered the approved message for '+item.name+' to the local test inbox.');
+ }
+ state.approved.clear();
+ el('batchFeedback').textContent='Delivered '+batch.length+(batch.length===1?' draft':' drafts')+' to the local test inbox.';
+ el('feedback').textContent='';
+ updateBatch();
 };
 </script></html>
