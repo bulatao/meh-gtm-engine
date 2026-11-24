@@ -18,7 +18,7 @@ The browser holds an editable product offer, buyer role and discovery filter. Th
 
 The review screen displays a relationship chain from account through public signal and inferred buying role to MEH service. The current implementation renders this chain from fixture records. A full pipeline would persist Company, Person, Signal and Service nodes and query their relationships. Person records should be linked to their own sources before being labeled verified.
 
-The engine drafts outreach from the selected evidence, offer and route. For Tyrone, it drafts an internal qualification note because follow-up belongs in the published procurement process. Human approval records the exact draft in memory. Editing invalidates approval, and local delivery checks the approved text again before adding it to the visible test inbox and changing the pipeline stage. Rejection excludes the account from subsequent discovery runs in the current session and records an audit entry. Inbox, pipeline and audit state reset on reload.
+The engine drafts outreach from the selected evidence, offer and route. For Tyrone, it drafts an internal qualification note because follow-up belongs in the published procurement process. Selecting a card or approving its draft records the exact approved text in a single batch queue. Editing an approved draft removes just that draft from the queue. The batch button delivers each approved snapshot to the visible local test inbox and changes the corresponding pipeline stage. Rejection excludes the account from subsequent discovery runs in the current session and records an audit entry. Inbox, pipeline and audit state reset on reload.
 
 ## Two-minute demo outline
 
