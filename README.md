@@ -12,7 +12,7 @@ Open `index.html` directly in a current desktop browser. A static host can serve
 
 1. Review the prefilled offer or replace it. Select **Generate buyer profile from offer** immediately below it to populate the blank profile fields, then **Discover companies and hiring signals**. Check both source links and the ranking explanation. **Other discovery options** contains the curated examples and manual board scan.
 2. Select **Run demo examples**, then **Review match** under the Town of Tyrone. Review the evidence and EMPIST's fit and eligibility gaps.
-3. Approve the internal draft and send it to the local test inbox. Verify that the exact draft appears and the pipeline records delivery.
+3. Approve the internal draft and select a second card directly. Both actions approve a draft and add it to the same batch. At the bottom, verify the selected count and send the batch to the local test inbox. Verify both drafts appear and the pipeline records delivery.
 4. Reject a weak match and confirm discovery excludes it for the browser session.
 
 The local test inbox does not deliver external mail. Public signals do not confirm buying intent or provider availability. Procurement is a curated example and live discovery currently scans Greenhouse hiring data. Session data resets on reload.
