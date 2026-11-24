@@ -41,7 +41,9 @@ const capabilityGroups = [
  ['cloud','AWS','Azure','GCP'],
  ['data','analytics','Databricks','data engineering'],
  ['cybersecurity','security','compliance'],
- ['managed IT','IT support','service desk']
+ ['managed IT','IT support','service desk'],
+ ['event planning','corporate events','corporate event','event planner','event planners','event manager','events manager','event coordinator','events coordinator','meeting planner','event marketing','experiential marketing','field marketing','conferences'],
+ ['venue sourcing','venue booking','event venues','venue marketplace','venue selection']
 ];
 function words(value) {
  return value.toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
@@ -52,6 +54,14 @@ function mentions(value,phrase) {
 }
 function inferProfile(offer) {
  const topics=capabilityGroups.filter(group=>group.some(term=>mentions(offer,term))).map(group=>group[0]);
+ if(topics.includes('event planning') || topics.includes('venue sourcing') || /\bvenues?\b/i.test(offer)) {
+  return {
+   buyer:'Corporate event planner or events manager',
+   segment:'Companies planning meetings, conferences, or offsites',
+   topics:'event planning, event marketing',
+   priority:'either'
+  };
+ }
  const contractor=/specialist|individual|contractor|staff augmentation/i.test(offer);
  const provider=/managed service|managed IT|MSP|outsourced/i.test(offer);
  const priority=contractor===provider?'either':contractor?'individual':'msp';
@@ -87,7 +97,8 @@ function cleanDescription(value) {
 }
 function hiringSignal(job,board,company) {
  const title=String(job.title || '');
- if(!/\b(?:ai|machine learning|cloud|data|mlops|llm|generative)\b/i.test(title)) return null;
+ if(!capabilityGroups.some(group=>group.some(term=>mentions(title,term))) &&
+    !/\b(?:mlops|generative)\b/i.test(title)) return null;
  const url=String(job.absolute_url || '');
  if(!/^https:\/\//i.test(url)) return null;
  const description=cleanDescription(job.content);
@@ -228,6 +239,7 @@ function review(item,route) {
 let activeRecords=fixtures;
 let discoveryStatus='';
 let discoveryRun=0;
+let profiledOffer=el('offer').value.trim();
 function showDiscoveryBusy(busy) {
  el('liveButton').disabled=busy;
  el('autoDiscovery').disabled=busy;
@@ -240,6 +252,13 @@ el('generateProfile').onclick=()=>{
  if(!offer) {el('profileReason').textContent='Enter an offer first.';return;}
  const profile=inferProfile(offer);
  for(const [field,value] of Object.entries(profile)) el(field).value=value;
+ if(offer!==profiledOffer) {
+  discoveryRun++;
+  showDiscoveryBusy(false);
+  activeRecords=[];
+  discoveryStatus='Offer changed. Run discovery to find results for this profile.';
+ }
+ profiledOffer=offer;
  el('profileReason').textContent='Profile suggested from the offer. Edit any field before ranking. Company size and purchase intent need verification.';
  discover(activeRecords,discoveryStatus);
 };
