@@ -9,14 +9,19 @@
 <section><h2>Define your customer</h2>
 <form id="intake"><label for="offer">Offer</label><textarea id="offer" rows="2" required>MultiExpert Hub matches companies with individual AI specialists or managed service providers for AI delivery and operations.</textarea>
 <label for="buyer">Target buyer role</label><input id="buyer" value="IT or AI delivery leader" required>
+<label for="segment">Target segment</label><input id="segment" value="Organizations building or operating AI systems">
+<label for="topics">Priority capabilities</label><input id="topics" value="AI, machine learning" placeholder="AI, cloud, data">
+<label for="priority">Engagement priority</label><select id="priority"><option value="either">Either engagement</option><option value="individual">Individual specialist</option><option value="msp">Managed service provider</option></select>
+<button type="button" class="secondary" id="generateProfile">Generate buyer profile from offer</button>
+<p id="profileReason" class="muted" aria-live="polite"></p>
 <label for="scope">Discovery filter</label><select id="scope"><option value="all">All evidence types</option><option value="individual">Individual contributor signals</option><option value="msp">MSP signals</option><option value="unclear">Needs discovery</option></select>
 <button>Run demo examples</button></form>
 <form id="liveDiscovery"><label for="boards">Public Greenhouse job boards</label><input id="boards" value="arionkoder, future" required maxlength="150" aria-describedby="liveHelp">
 <p id="liveHelp" class="muted">Enter comma-separated board names. Published job postings are hiring signals. The curated MSP example remains available under Run demo examples.</p>
 <button id="liveButton">Find live hiring signals</button></form>
-<p id="profile" class="muted" aria-live="polite"></p></section>
+<p id="profile" class="muted" aria-live="polite"></p><button type="button" id="rerank" class="secondary">Apply criteria to current results</button></section>
 <section><h2>Evidence and matches</h2><p class="muted">Provider availability and eligibility require confirmation.</p><div id="matches" class="grid"></div></section>
-<section id="review" hidden><h2>Review outreach</h2><div id="graph" class="graph"></div><div id="provider" hidden></div><p id="question"></p><label for="message">Draft email</label><textarea id="message" rows="7"></textarea><button id="approve">Approve draft</button><button class="secondary" id="reject">Reject draft</button><button id="delivery" class="secondary" disabled>Send to local test inbox</button><p id="feedback" aria-live="polite"></p></section>
+<section id="review" hidden><h2>Review outreach</h2><div id="graph" class="graph"></div><div id="contactEvidence"></div><div id="provider" hidden></div><p id="question"></p><label for="message">Draft email</label><textarea id="message" rows="7"></textarea><button id="approve">Approve draft</button><button class="secondary" id="reject">Reject draft</button><button id="delivery" class="secondary" disabled>Send to local test inbox</button><p id="feedback" aria-live="polite"></p></section>
 <section><h2>Local test inbox</h2><p class="muted">The demo captures approved messages here without external delivery.</p><div id="inbox" aria-live="polite"></div></section>
 <section><h2>Pipeline and audit trail</h2><div id="pipeline" class="grid"></div><ol class="log" id="audit"></ol></section>
 </main><script>
@@ -26,6 +31,49 @@ const fixtures = [
  {id:'future', name:'Future', signal:'Its career page seeks an applied AI engineer to build product features. It does not establish whether the company uses outside specialists or delivery partners.', url:'https://job-boards.greenhouse.io/future/jobs/4745515005', expected:'unclear'}
 ];
 const labels = {individual:'Individual contributor',msp:'Managed service provider',unclear:'Needs discovery'};
+const contactDirectory = {
+ arionkoder:{contact:'Adrian Escofet, VP of Team Augmentation Services',contactUrl:'https://www.arionkoder.com/who-we-are',contactNote:'Public role verified. Ownership of this opening and purchasing authority are unconfirmed.'}
+};
+const capabilityGroups = [
+ ['AI','machine learning','LLM','generative AI','AI agents'],
+ ['cloud','AWS','Azure','GCP'],
+ ['data','analytics','Databricks','data engineering'],
+ ['cybersecurity','security','compliance'],
+ ['managed IT','IT support','service desk']
+];
+function words(value) {
+ return value.toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+}
+function mentions(value,phrase) {
+ const target=words(phrase);
+ return target!=='' && (' '+words(value)+' ').includes(' '+target+' ');
+}
+function inferProfile(offer) {
+ const topics=capabilityGroups.filter(group=>group.some(term=>mentions(offer,term))).map(group=>group[0]);
+ const contractor=/specialist|individual|contractor|staff augmentation/i.test(offer);
+ const provider=/managed service|managed IT|MSP|outsourced/i.test(offer);
+ const priority=contractor===provider?'either':contractor?'individual':'msp';
+ return {
+  buyer:topics.includes('AI')?'AI delivery or engineering leader':'IT or operations leader',
+  segment:topics.length?'Organizations investing in '+topics.join(', '):'Organizations evaluating outside delivery support',
+  topics:topics.join(', '),priority
+ };
+}
+function rankMatch(item,profile) {
+ const route=item.route || classify(item.signal);
+ const evidence=(item.title || '')+' '+item.signal+' '+(item.skills || '');
+ const topics=profile.topics.split(',').map(topic=>topic.trim()).filter(Boolean);
+ const matched=topics.filter(topic=>{
+  const aliases=capabilityGroups.find(group=>group.some(term=>words(term)===words(topic))) || [topic];
+  return aliases.some(term=>mentions(evidence,term));
+ });
+ const routeFits=route!=='unclear' && (profile.priority==='either' || profile.priority===route);
+ const score=Math.min(50,matched.length*25)+(routeFits?35:0)+(item.contact?15:0);
+ const reasons=[matched.length?'Capability evidence: '+matched.join(', '):'No priority capability found in the cited signal',
+  routeFits?'Engagement signal fits the selected priority':route==='unclear'?'Engagement needs confirmation':'Engagement differs from the selected priority',
+  item.contact?'Public contact role sourced':'Contact role inferred'];
+ return {...item,route,score,reasons};
+}
 function classify(signal) {
  if (/fully managed|managed service supplier|accountable prime contractor/i.test(signal)) return 'msp';
  if (/\bcontract\s+(?:an?\s+)?(?:senior\s+)?(?:ai|machine learning|cloud|data)\s+(?:engineer|specialist)\b|\b(?:contractor|contract position|contract role)\b/i.test(signal)) return 'individual';
@@ -46,7 +94,8 @@ function hiringSignal(job,board,company) {
  const signal=contract
   ? contract.trim()
   : 'The public job board lists '+title+'. The posting alone does not establish a need for an outside provider.';
- return {id:'live:'+board+':'+job.id,name:company, title,signal,url,route:contract || classify(title)==='individual'?'individual':'unclear'};
+ return {id:'live:'+board+':'+job.id,name:company,title,signal,url,
+  route:contract || classify(title)==='individual'?'individual':'unclear',...contactDirectory[board]};
 }
 async function fetchHiringBoard(board) {
  const response=await fetch('https://boards-api.greenhouse.io/v1/boards/'+encodeURIComponent(board)+'/jobs?content=true',{signal:AbortSignal.timeout(12000)});
@@ -82,8 +131,11 @@ function discover(records=fixtures, diagnostics='') {
  el('review').hidden=true;
  el('matches').replaceChildren();
  const scope=el('scope').value;
- const candidates=records.filter(item => !state.excluded.has(item.id) && (scope==='all'||(item.route || classify(item.signal))===scope));
- el('profile').textContent='Buyer: '+el('buyer').value+'. '+candidates.length+' matches. '+diagnostics;
+ const profile={topics:el('topics').value,priority:el('priority').value};
+ const candidates=records.filter(item=>!state.excluded.has(item.id))
+  .map(item=>rankMatch(item,profile)).filter(item=>scope==='all'||item.route===scope)
+  .sort((left,right)=>right.score-left.score);
+ el('profile').textContent='Buyer: '+el('buyer').value+'. Segment hypothesis: '+el('segment').value+'. '+candidates.length+' matches. '+diagnostics;
  for(const item of candidates) {
   const route=item.route || classify(item.signal);
   state.leads[item.id] ??= {...item,stage:'Matched'};
@@ -92,6 +144,7 @@ function discover(records=fixtures, diagnostics='') {
   if(item.title) add(card,'p',item.title,'muted');
   add(card,'div',labels[route],'route');
   add(card,'p',item.signal);
+  add(card,'p','Fit '+item.score+'/100 · '+item.reasons.join(' · '),'muted');
   const source=add(card,'a','Open public evidence');
   source.href=item.url;
   source.target='_blank';
@@ -110,6 +163,14 @@ function review(item,route) {
  const nodes=[item.name,'Public signal',item.contact || el('buyer').value+' (inferred)',labels[route]];
  if(item.provider) nodes.push(item.provider.name+' (candidate)');
  for(const node of nodes) add(el('graph'),'span',node);
+ el('contactEvidence').replaceChildren();
+ if(item.contactUrl) {
+  add(el('contactEvidence'),'p',item.contactNote || 'The public RFP names this proposal addressee.');
+  const source=add(el('contactEvidence'),'a','Open public contact source');
+  source.href=item.contactUrl;
+  source.target='_blank';
+  source.rel='noopener noreferrer';
+ }
  const providerBox=el('provider');
  providerBox.replaceChildren();
  providerBox.hidden=!item.provider;
@@ -129,7 +190,7 @@ function review(item,route) {
  el('question').textContent=question;
  el('message').value=item.provider
   ? ['Subject: Internal review — '+item.provider.name+' and Tyrone RFP TH-2026-03','','MEH team,','',item.signal,item.provider.fit,'',item.provider.gaps,'','Please verify eligibility and use the published procurement process for any follow-up.','',item.url,item.provider.url].join('\n')
-  : ['Subject: AI delivery support for '+item.name,'','Hi '+item.name+' team,','',item.signal,'',el('offer').value+' '+question,'','Jose | MultiExpert Hub'].join('\n');
+  : ['Subject: AI delivery support for '+item.name,'','Hi '+item.name+' team,','',item.signal,'',el('offer').value+' '+question,'','Source: '+item.url,'','Jose | MultiExpert Hub'].join('\n');
  el('feedback').textContent='';
  el('delivery').disabled=true;
  el('review').scrollIntoView({block:'nearest'});
@@ -137,6 +198,15 @@ function review(item,route) {
 let activeRecords=fixtures;
 let discoveryStatus='';
 let discoveryRun=0;
+el('generateProfile').onclick=()=>{
+ const offer=el('offer').value.trim();
+ if(!offer) {el('profileReason').textContent='Enter an offer first.';return;}
+ const profile=inferProfile(offer);
+ for(const [field,value] of Object.entries(profile)) el(field).value=value;
+ el('profileReason').textContent='Profile suggested from the offer. Edit any field before ranking. Company size and purchase intent need verification.';
+ discover(activeRecords,discoveryStatus);
+};
+el('rerank').onclick=()=>discover(activeRecords,discoveryStatus);
 el('intake').onsubmit=event=>{
  event.preventDefault();
  discoveryRun++;
