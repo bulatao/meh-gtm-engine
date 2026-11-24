@@ -10,7 +10,7 @@ Open `index.html` directly in a current desktop browser. A static host can serve
 
 ## Reviewer walkthrough
 
-1. Select **Generate buyer profile from offer**, then **Discover companies and hiring signals** to find boards from public Hacker News discussions and verify current jobs on Greenhouse. Check both source links and the ranking explanation. **Scan selected boards** runs live discovery on the entered boards instead.
+1. Review the prefilled offer or replace it. Select **Generate buyer profile from offer** immediately below it to populate the blank profile fields, then **Discover companies and hiring signals**. Check both source links and the ranking explanation. **Other discovery options** contains the curated examples and manual board scan.
 2. Select **Run demo examples**, then **Review match** under the Town of Tyrone. Review the evidence and EMPIST's fit and eligibility gaps.
 3. Approve the internal draft and send it to the local test inbox. Verify that the exact draft appears and the pipeline records delivery.
 4. Reject a weak match and confirm discovery excludes it for the browser session.
